@@ -1,5 +1,4 @@
-import { batch, signal, effect } from '@dominator/core';
-import { setupDelegation, addEventListener } from '@dominator/core';
+import { batch, signal } from '@dominator/core';
 import './style.css';
 import {
     gridData,
@@ -112,22 +111,16 @@ const handleKeyDown = (e: KeyboardEvent) => {
     }
 };
 
-let rootEl: HTMLElement;
 let viewportSpacer: HTMLElement;
 let currentRenderedRows: number[] = [];
 let currentRenderedCols: number[] = [];
-let updateFrameId: number;
+let lastUpdate = 0;
 
 const renderApp = () => {
     const app = document.getElementById('app');
     if (!app) return;
     
-    app.innerHTML = '';
-    
-    rootEl = document.createElement('div');
-    rootEl.className = 'million-cells-app';
-    
-    rootEl.innerHTML = `
+    app.innerHTML = `
         <header class="header">
             <h1>Million Cells Grid</h1>
             <div class="perf-overlay">
@@ -162,7 +155,7 @@ const renderApp = () => {
         </header>
         
         <main class="grid-main">
-            <div class="grid-scroll" id="grid-scroll" style="width: ${COLS * CELL_WIDTH}px; height: ${ROWS * CELL_HEIGHT}px;">
+            <div class="grid-scroll" id="grid-scroll" style="width: ${COLS * CELL_WIDTH}px; height: ${ROWS * CELL_HEIGHT}px; overflow: auto;">
                 <div class="viewport-spacer" id="viewport-spacer"></div>
             </div>
             
@@ -228,14 +221,10 @@ const renderApp = () => {
         </main>
     `;
     
-    app.appendChild(rootEl);
-    
     const gridScroll = document.getElementById('grid-scroll')!;
     viewportSpacer = document.getElementById('viewport-spacer')!;
-    const undoBtn = document.getElementById('undo-btn') as HTMLButtonElement;
     
     virtualScrollRoot.set(gridScroll);
-    setupDelegation(rootEl);
     
     const renderViewport = () => {
         const vp = viewport();
@@ -259,46 +248,37 @@ const renderApp = () => {
         viewportSpacer.style.height = `${rows.length * CELL_HEIGHT}px`;
         viewportSpacer.style.transform = `translate(${startCol * CELL_WIDTH}px, ${startRow * CELL_HEIGHT}px)`;
         
+        const grid = gridData();
+        
         for (const row of rows) {
             const rowEl = document.createElement('div');
             rowEl.className = 'grid-row';
+            rowEl.style.display = 'flex';
             
             for (const col of cols) {
-                const cellEl = createCellElement(row, col);
-                rowEl.appendChild(cellEl);
+                const key = getCellKey(row, col);
+                const value = grid.get(key) ?? 0;
+                
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.dataset.row = String(row);
+                cell.dataset.col = String(col);
+                cell.style.width = `${CELL_WIDTH}px`;
+                cell.style.height = `${CELL_HEIGHT}px`;
+                
+                renderCellContent(cell, value);
+                
+                cell.onclick = () => {
+                    selectedCell.set({ row, col });
+                };
+                
+                rowEl.appendChild(cell);
             }
             
             viewportSpacer.appendChild(rowEl);
         }
         
         updateStats();
-    };
-    
-    const createCellElement = (row: number, col: number): HTMLElement => {
-        const key = getCellKey(row, col);
-        const value = gridData().get(key) ?? 0;
-        
-        const cell = document.createElement('div');
-        cell.className = 'cell';
-        cell.dataset.row = String(row);
-        cell.dataset.col = String(col);
-        
-        renderCellContent(cell, value);
-        
-        addEventListener(cell, 'click', () => {
-            selectedCell.set({ row, col });
-        });
-        
-        cell.tabIndex = 0;
-        addEventListener(cell, 'keydown', (e: Event) => {
-            const ke = e as KeyboardEvent;
-            if (ke.key === 'ArrowUp' && row > 0) selectedCell.set({ row: row - 1, col });
-            else if (ke.key === 'ArrowDown' && row < ROWS - 1) selectedCell.set({ row: row + 1, col });
-            else if (ke.key === 'ArrowLeft' && col > 0) selectedCell.set({ row, col: col - 1 });
-            else if (ke.key === 'ArrowRight' && col < COLS - 1) selectedCell.set({ row, col: col + 1 });
-        });
-        
-        return cell;
     };
     
     const renderCellContent = (cell: HTMLElement, value: number) => {
@@ -308,7 +288,7 @@ const renderApp = () => {
         if (value >= 80) {
             cell.className = 'cell high';
             cell.style.backgroundColor = '#ef4444';
-            cell.innerHTML = '<span class="cell-icon">&#9733;</span><span class="cell-glow"></span>';
+            cell.innerHTML = '<span class="cell-icon">&#9733;</span>';
         } else if (value >= 50) {
             cell.className = 'cell medium';
             cell.style.backgroundColor = '#f97316';
@@ -359,8 +339,8 @@ const renderApp = () => {
             
             const cell = viewportSpacer.querySelector(`[data-row="${sel.row}"][data-col="${sel.col}"]`) as HTMLElement;
             if (cell) cell.classList.add('selected');
-        } else {
-            section!.style.display = 'none';
+        } else if (section) {
+            section.style.display = 'none';
         }
     };
     
@@ -403,6 +383,10 @@ const renderApp = () => {
     };
     
     const update = () => {
+        const now = performance.now();
+        if (now - lastUpdate < 16) return;
+        lastUpdate = now;
+        
         const rows = visibleRows();
         const cols = visibleCols();
         
@@ -425,59 +409,44 @@ const renderApp = () => {
         renderViewport();
     };
     
-    gridScroll.addEventListener('scroll', onScroll);
+    gridScroll.addEventListener('scroll', onScroll, { passive: true });
     
     const undoBtnEl = document.getElementById('undo-btn');
     if (undoBtnEl) {
-        addEventListener(undoBtnEl, 'click', () => performUndo());
+        undoBtnEl.onclick = () => performUndo();
     }
     
     const randBtn = document.getElementById('randomize-btn');
     if (randBtn) {
-        addEventListener(randBtn, 'click', () => {
+        randBtn.onclick = () => {
             const sel = selectedCell();
             if (sel) setCellValue(sel.row, sel.col, Math.floor(Math.random() * 100));
-        });
+        };
     }
     
     const clearBtn = document.getElementById('clear-btn');
     if (clearBtn) {
-        addEventListener(clearBtn, 'click', () => {
+        clearBtn.onclick = () => {
             const sel = selectedCell();
             if (sel) setCellValue(sel.row, sel.col, 0);
-        });
+        };
     }
-    
-    effect(() => {
-        viewport();
-        gridData();
-        selectedCell();
-        fps();
-        avgRenderMs();
-        batchSize();
-        memoryDelta();
-        liveDomNodes();
-        totalSignalUpdates();
-        undoStack();
-        
-        update();
-    });
     
     setTimeout(() => {
         updateViewport(gridScroll);
         renderViewport();
-    }, 50);
+    }, 100);
     
-    return rootEl;
+    setInterval(update, 100);
 };
 
 document.addEventListener('DOMContentLoaded', () => {
     renderApp();
     
-    let rafLoop = () => {
+    const rafLoop = () => {
         doRandomUpdates();
         updateLiveDomCount();
-        updateFrameId = requestAnimationFrame(rafLoop);
+        requestAnimationFrame(rafLoop);
     };
     
     rafLoop();
@@ -488,5 +457,5 @@ document.addEventListener('DOMContentLoaded', () => {
         if (root) {
             updateViewport(root);
         }
-    }, 100);
+    }, 500);
 });
