@@ -1,150 +1,74 @@
-<div class="million-cells-app">
-  <header class="header">
-    <h1>Million Cells Grid</h1>
-    <div class="perf-overlay">
-      <div class="perf-item">
-        <span class="perf-label">FPS</span>
-        <span class="perf-value {fps() >= 55 ? 'good' : fps() >= 30 ? 'warn' : 'bad'}">{fps()}</span>
-      </div>
-      <div class="perf-item">
-        <span class="perf-label">Render</span>
-        <span class="perf-value {avgRenderMs() <= 12 ? 'good' : avgRenderMs() <= 20 ? 'warn' : 'bad'}">{avgRenderMs().toFixed(1)}ms</span>
-      </div>
-      <div class="perf-item">
-        <span class="perf-label">Batch</span>
-        <span class="perf-value">{batchSize()}</span>
-      </div>
-      <div class="perf-item">
-        <span class="perf-label">DOM</span>
-        <span class="perf-value">{liveDomNodes()}</span>
-      </div>
-      <div class="perf-item">
-        <span class="perf-label">Memory</span>
-        <span class="perf-value">{memoryDelta()}MB</span>
-      </div>
-      <div class="perf-item">
-        <span class="perf-label">Updates</span>
-        <span class="perf-value">{totalSignalUpdates()}</span>
-      </div>
-    </div>
-    <div class="header-actions">
-      <button onClick={performUndo} disabled={undoStack().length === 0}>Undo</button>
-    </div>
-  </header>
+<div class="grid-container" 
+     on:scroll="{onScroll}"
+     style="contain: strict; content-visibility: auto; background: #000; color: #eee; overflow: auto; width: 100%; height: 100%; position: relative; font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;">
   
-  <main class="grid-main">
-    <div class="grid-container" 
-         style:width="{COLS * CELL_WIDTH}px" 
-         style:height="{ROWS * CELL_HEIGHT}px"
-         onScroll={e => { const t = e.target as HTMLElement; updateViewport(t); }}
-         ref={el => virtualScrollRoot.set(el)}>
-      <div class="viewport-spacer" 
-           style:transform="translate({viewport().startCol * CELL_WIDTH}px, {viewport().startRow * CELL_HEIGHT}px)">
-        {visibleRows().map(row => (
-          <div class="grid-row" key={row}>
-            {visibleCols().map(col => {
-              const key = getCellKey(row, col);
-              const value = gridData().get(key) ?? 0;
-              const isSelected = selectedCell()?.row === row && selectedCell()?.col === col;
-              return (
-                <div 
-                  class="cell {value >= 80 ? 'high' : value >= 50 ? 'medium' : value >= 20 ? 'low' : 'none'} {isSelected ? 'selected' : ''}"
-                  style:backgroundColor={value >= 80 ? '#ef4444' : value >= 50 ? '#f97316' : value >= 20 ? '#6b7280' : '#1e293b'}
-                  style:--heat={value / 100}
-                  onClick={e => { e.stopPropagation(); selectedCell.set({row, col}); }}
-                  onKeydown={e => { 
-                    if (e.key === 'ArrowUp' && row > 0) selectedCell.set({row: row - 1, col});
-                    else if (e.key === 'ArrowDown' && row < ROWS - 1) selectedCell.set({row: row + 1, col});
-                    else if (e.key === 'ArrowLeft' && col > 0) selectedCell.set({row, col: col - 1});
-                    else if (e.key === 'ArrowRight' && col < COLS - 1) selectedCell.set({row, col: col + 1});
-                  }}
-                  data-row={row}
-                  data-col={col}
-                  tabIndex={0}
-                >
-                  {#if value >= 80}
-                    <span class="cell-icon">&#9733;</span>
-                    <span class="cell-glow"></span>
-                  {else if value >= 50}
-                    <div class="heat-bar" style:width="{value}%"></div>
-                  {else if value >= 20}
-                    <span class="cell-value">{value}</span>
-                  {else if value > 0}
-                    <div class="mini-bar" style:width="{value * 2}%"></div>
-                  {/if}
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-    </div>
+  <div class="grid-spacer" 
+       style:height="{state.TOTAL_ROWS * 24}px" 
+       style:width="{state.TOTAL_COLS * 80}px"
+       style="position: relative;">
     
-    <aside class="sidebar">
-      <section class="stats-section">
-        <h3>Grid Stats</h3>
-        <div class="stat-row">
-          <span>Total Cells:</span>
-          <strong>{TOTAL_CELLS.toLocaleString()}</strong>
-        </div>
-        <div class="stat-row">
-          <span>Non-Empty:</span>
-          <strong>{gridData().size.toLocaleString()}</strong>
-        </div>
-        <div class="stat-row">
-          <span>High Value (80+):</span>
-          <strong>{highValueCount()}</strong>
-        </div>
-      </section>
+    <div class="grid-viewport" 
+         style:transform="translate({state.computed(() => state.viewport.colStart() * 80)()}px, {state.computed(() => state.viewport.rowStart() * 24)()}px)"
+         style="position: absolute; top: 0; left: 0; display: flex; flex-direction: column; will-change: transform;">
       
-      <section class="stats-section">
-        <h3>Viewport</h3>
-        <div class="stat-row">
-          <span>Visible Rows:</span>
-          <strong>{viewport().endRow - viewport().startRow}</strong>
+      {#each state.visibleRows() as row}
+        <div class="grid-row" style="display: flex; height: 24px;">
+          {#each state.visibleCols() as col}
+            <div class="grid-cell {state.selectedCell() === (row.id + '-' + col.id) ? 'selected' : ''}"
+                 style:width="80px"
+                 style:height="24px"
+                 style:background="{state.getCellBg(row.id, col.id)}"
+                 class="{state.getCellClass(row.id, col.id)}"
+                 on:click="{() => (window as any).onCellClick(row.id, col.id)}">
+              {state.getCellValue(row.id, col.id)}
+            </div>
+          {/each}
         </div>
-        <div class="stat-row">
-          <span>Visible Cols:</span>
-          <strong>{viewport().endCol - viewport().startCol}</strong>
-        </div>
-        <div class="stat-row">
-          <span>VNodes:</span>
-          <strong>{(viewport().endRow - viewport().startRow) * (viewport().endCol - viewport().startCol)}</strong>
-        </div>
-      </section>
+      {/each}
       
-      {#if selectedCell()}
-        <section class="stats-section">
-          <h3>Selected Cell</h3>
-          <div class="stat-row">
-            <span>Row:</span>
-            <strong>{selectedCell()?.row}</strong>
-          </div>
-          <div class="stat-row">
-            <span>Col:</span>
-            <strong>{selectedCell()?.col}</strong>
-          </div>
-          <div class="stat-row">
-            <span>Value:</span>
-            <strong>{gridData().get(getCellKey(selectedCell()!.row, selectedCell()!.col)) ?? 0}</strong>
-          </div>
-          <button class="action-btn" onClick={e => {
-            const cell = selectedCell();
-            if (cell) setCellValue(cell.row, cell.col, Math.floor(Math.random() * 100));
-          }}>Randomize</button>
-          <button class="action-btn" onClick={e => {
-            const cell = selectedCell();
-            if (cell) setCellValue(cell.row, cell.col, 0);
-          }}>Clear</button>
-        </section>
-      {/if}
-      
-      <section class="controls-section">
-        <h3>Controls</h3>
-        <p class="hint">Arrow keys to navigate cells</p>
-        <p class="hint">Click to select</p>
-        <p class="hint">Updates: RAF batch (1000-3000/frame)</p>
-      </section>
-    </aside>
-  </main>
+    </div>
+  </div>
+
+  <div class="perf-overlay" style="position: fixed; bottom: 8px; right: 8px; background: rgba(0,0,0,0.85); color: #ccc; padding: 12px; font-size: 10px; border: 1px solid #333; z-index: 1000; backdrop-filter: blur(4px); pointer-events: none; line-height: 1.6;">
+    <div style="color: #fff; margin-bottom: 4px; border-bottom: 1px solid #444; padding-bottom: 4px; letter-spacing: 0.1em;">DOM-STRESS-1M</div>
+    <div>FPS: <span style:color="{state.perf.fps() < 50 ? '#ff5555' : '#55ff55'}">{state.perf.fps()}</span></div>
+    <div>AVG RENDER: {state.perf.avgRenderTime()}ms</div>
+    <div>BATCH: {state.perf.lastUpdateBatchSize()}</div>
+    <div style="margin-top: 4px; border-top: 1px solid #444; padding-top: 4px;">
+      STATS (VISIBLE):<br/>
+      AVG: {state.stats().avg}<br/>
+      HIGH: {state.stats().highValues}
+    </div>
+  </div>
+
+  <style>
+    .grid-cell {
+      border: 0.5px solid #222;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #999;
+      cursor: crosshair;
+      transition: background 0.1s, box-shadow 0.2s;
+    }
+    .grid-cell:hover {
+      border-color: #666;
+      background: #111 !important;
+      z-index: 1;
+    }
+    .grid-cell.selected {
+      border: 1px solid #fff !important;
+      color: #fff;
+      z-index: 2;
+      box-shadow: 0 0 10px rgba(255,255,255,0.2);
+    }
+    .cell-high {
+      box-shadow: inset 0 0 15px rgba(255,255,255,0.1);
+      filter: brightness(1.2);
+    }
+    .cell-glow {
+      box-shadow: 0 0 8px rgba(255,255,255,0.3);
+      border-color: #555 !important;
+    }
+  </style>
 </div>
