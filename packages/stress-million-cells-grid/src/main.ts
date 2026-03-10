@@ -1,4 +1,5 @@
-import { batch, effect } from '@dominator/core';
+import { batch, signal, effect } from '@dominator/core';
+import { setupDelegation, addEventListener } from '@dominator/core';
 import './style.css';
 import {
     gridData,
@@ -111,17 +112,25 @@ const handleKeyDown = (e: KeyboardEvent) => {
     }
 };
 
+let rootEl: HTMLElement;
+let viewportSpacer: HTMLElement;
+let currentRenderedRows: number[] = [];
+let currentRenderedCols: number[] = [];
+let updateFrameId: number;
+
 const renderApp = () => {
     const app = document.getElementById('app');
     if (!app) return;
     
-    const container = document.createElement('div');
-    container.className = 'million-cells-app';
+    app.innerHTML = '';
     
-    container.innerHTML = `
+    rootEl = document.createElement('div');
+    rootEl.className = 'million-cells-app';
+    
+    rootEl.innerHTML = `
         <header class="header">
             <h1>Million Cells Grid</h1>
-            <div class="perf-overlay" id="perf-overlay">
+            <div class="perf-overlay">
                 <div class="perf-item">
                     <span class="perf-label">FPS</span>
                     <span class="perf-value" id="perf-fps">0</span>
@@ -153,8 +162,7 @@ const renderApp = () => {
         </header>
         
         <main class="grid-main">
-            <div class="grid-container" id="grid-container" 
-                 style="width: ${COLS * CELL_WIDTH}px; height: ${ROWS * CELL_HEIGHT}px;">
+            <div class="grid-scroll" id="grid-scroll" style="width: ${COLS * CELL_WIDTH}px; height: ${ROWS * CELL_HEIGHT}px;">
                 <div class="viewport-spacer" id="viewport-spacer"></div>
             </div>
             
@@ -220,16 +228,14 @@ const renderApp = () => {
         </main>
     `;
     
-    app.appendChild(container);
+    app.appendChild(rootEl);
     
-    const gridContainer = document.getElementById('grid-container')!;
-    const viewportSpacer = document.getElementById('viewport-spacer')!;
+    const gridScroll = document.getElementById('grid-scroll')!;
+    viewportSpacer = document.getElementById('viewport-spacer')!;
     const undoBtn = document.getElementById('undo-btn') as HTMLButtonElement;
     
-    virtualScrollRoot.set(gridContainer);
-    
-    let currentRenderedRows: number[] = [];
-    let currentRenderedCols: number[] = [];
+    virtualScrollRoot.set(gridScroll);
+    setupDelegation(rootEl);
     
     const renderViewport = () => {
         const vp = viewport();
@@ -246,7 +252,6 @@ const renderApp = () => {
         
         viewportSpacer.innerHTML = '';
         
-        const grid = gridData();
         const startRow = rows[0] ?? 0;
         const startCol = cols[0] ?? 0;
         
@@ -257,26 +262,16 @@ const renderApp = () => {
         for (const row of rows) {
             const rowEl = document.createElement('div');
             rowEl.className = 'grid-row';
-            rowEl.style.position = 'relative';
-            rowEl.style.height = `${CELL_HEIGHT}px`;
             
             for (const col of cols) {
                 const cellEl = createCellElement(row, col);
-                cellEl.style.position = 'absolute';
-                cellEl.style.left = `${(col - startCol) * CELL_WIDTH}px`;
-                cellEl.style.top = '0';
                 rowEl.appendChild(cellEl);
             }
             
             viewportSpacer.appendChild(rowEl);
         }
         
-        const vpRowsEl = document.getElementById('vp-rows');
-        const vpColsEl = document.getElementById('vp-cols');
-        const vpVnodesEl = document.getElementById('vp-vnodes');
-        if (vpRowsEl) vpRowsEl.textContent = String(vp.endRow - vp.startRow);
-        if (vpColsEl) vpColsEl.textContent = String(vp.endCol - vp.startCol);
-        if (vpVnodesEl) vpVnodesEl.textContent = String((vp.endRow - vp.startRow) * (vp.endCol - vp.startCol));
+        updateStats();
     };
     
     const createCellElement = (row: number, col: number): HTMLElement => {
@@ -288,40 +283,48 @@ const renderApp = () => {
         cell.dataset.row = String(row);
         cell.dataset.col = String(col);
         
+        renderCellContent(cell, value);
+        
+        addEventListener(cell, 'click', () => {
+            selectedCell.set({ row, col });
+        });
+        
+        cell.tabIndex = 0;
+        addEventListener(cell, 'keydown', (e: Event) => {
+            const ke = e as KeyboardEvent;
+            if (ke.key === 'ArrowUp' && row > 0) selectedCell.set({ row: row - 1, col });
+            else if (ke.key === 'ArrowDown' && row < ROWS - 1) selectedCell.set({ row: row + 1, col });
+            else if (ke.key === 'ArrowLeft' && col > 0) selectedCell.set({ row, col: col - 1 });
+            else if (ke.key === 'ArrowRight' && col < COLS - 1) selectedCell.set({ row, col: col + 1 });
+        });
+        
+        return cell;
+    };
+    
+    const renderCellContent = (cell: HTMLElement, value: number) => {
+        cell.style.backgroundColor = '';
+        cell.innerHTML = '';
+        
         if (value >= 80) {
-            cell.classList.add('high');
+            cell.className = 'cell high';
             cell.style.backgroundColor = '#ef4444';
             cell.innerHTML = '<span class="cell-icon">&#9733;</span><span class="cell-glow"></span>';
         } else if (value >= 50) {
-            cell.classList.add('medium');
+            cell.className = 'cell medium';
             cell.style.backgroundColor = '#f97316';
             cell.innerHTML = `<div class="heat-bar" style="width: ${value}%"></div>`;
         } else if (value >= 20) {
-            cell.classList.add('low');
+            cell.className = 'cell low';
             cell.style.backgroundColor = '#6b7280';
             cell.innerHTML = `<span class="cell-value">${value}</span>`;
         } else if (value > 0) {
-            cell.classList.add('none');
+            cell.className = 'cell none';
             cell.style.backgroundColor = '#1e293b';
             cell.innerHTML = `<div class="mini-bar" style="width: ${value * 2}%"></div>`;
         } else {
+            cell.className = 'cell';
             cell.style.backgroundColor = '#1e293b';
         }
-        
-        cell.onclick = (e) => {
-            e.stopPropagation();
-            selectedCell.set({ row, col });
-        };
-        
-        cell.tabIndex = 0;
-        cell.onkeydown = (e) => {
-            if (e.key === 'ArrowUp' && row > 0) selectedCell.set({ row: row - 1, col });
-            else if (e.key === 'ArrowDown' && row < ROWS - 1) selectedCell.set({ row: row + 1, col });
-            else if (e.key === 'ArrowLeft' && col > 0) selectedCell.set({ row, col: col - 1 });
-            else if (e.key === 'ArrowRight' && col < COLS - 1) selectedCell.set({ row, col: col + 1 });
-        };
-        
-        return cell;
     };
     
     const updateCellValue = (row: number, col: number) => {
@@ -331,29 +334,7 @@ const renderApp = () => {
         const cell = viewportSpacer.querySelector(`[data-row="${row}"][data-col="${col}"]`) as HTMLElement;
         if (!cell) return;
         
-        cell.className = 'cell';
-        cell.style.backgroundColor = '';
-        cell.innerHTML = '';
-        
-        if (value >= 80) {
-            cell.classList.add('high');
-            cell.style.backgroundColor = '#ef4444';
-            cell.innerHTML = '<span class="cell-icon">&#9733;</span><span class="cell-glow"></span>';
-        } else if (value >= 50) {
-            cell.classList.add('medium');
-            cell.style.backgroundColor = '#f97316';
-            cell.innerHTML = `<div class="heat-bar" style="width: ${value}%"></div>`;
-        } else if (value >= 20) {
-            cell.classList.add('low');
-            cell.style.backgroundColor = '#6b7280';
-            cell.innerHTML = `<span class="cell-value">${value}</span>`;
-        } else if (value > 0) {
-            cell.classList.add('none');
-            cell.style.backgroundColor = '#1e293b';
-            cell.innerHTML = `<div class="mini-bar" style="width: ${value * 2}%"></div>`;
-        } else {
-            cell.style.backgroundColor = '#1e293b';
-        }
+        renderCellContent(cell, value);
         
         const sel = selectedCell();
         if (sel && sel.row === row && sel.col === col) {
@@ -365,6 +346,8 @@ const renderApp = () => {
         const sel = selectedCell();
         const section = document.getElementById('selected-section');
         
+        document.querySelectorAll('.cell.selected').forEach(c => c.classList.remove('selected'));
+        
         if (sel) {
             section!.style.display = 'block';
             const rowEl = document.getElementById('sel-row');
@@ -374,7 +357,6 @@ const renderApp = () => {
             if (colEl) colEl.textContent = String(sel.col);
             if (valEl) valEl.textContent = String(gridData().get(getCellKey(sel.row, sel.col)) ?? 0);
             
-            document.querySelectorAll('.cell.selected').forEach(c => c.classList.remove('selected'));
             const cell = viewportSpacer.querySelector(`[data-row="${sel.row}"][data-col="${sel.col}"]`) as HTMLElement;
             if (cell) cell.classList.add('selected');
         } else {
@@ -385,8 +367,17 @@ const renderApp = () => {
     const updateStats = () => {
         const nonempty = document.getElementById('stat-nonempty');
         const high = document.getElementById('stat-high');
+        const vpRowsEl = document.getElementById('vp-rows');
+        const vpColsEl = document.getElementById('vp-cols');
+        const vpVnodesEl = document.getElementById('vp-vnodes');
+        
         if (nonempty) nonempty.textContent = gridData().size.toLocaleString();
         if (high) high.textContent = String(highValueCount());
+        
+        const vp = viewport();
+        if (vpRowsEl) vpRowsEl.textContent = String(vp.endRow - vp.startRow);
+        if (vpColsEl) vpColsEl.textContent = String(vp.endCol - vp.startCol);
+        if (vpVnodesEl) vpVnodesEl.textContent = String((vp.endRow - vp.startRow) * (vp.endCol - vp.startCol));
     };
     
     const updatePerf = () => {
@@ -411,27 +402,7 @@ const renderApp = () => {
         if (updEl) updEl.textContent = totalSignalUpdates().toLocaleString();
     };
     
-    gridContainer.onscroll = () => updateViewport(gridContainer);
-    
-    undoBtn.onclick = () => performUndo();
-    
-    document.getElementById('randomize-btn')!.onclick = () => {
-        const sel = selectedCell();
-        if (sel) setCellValue(sel.row, sel.col, Math.floor(Math.random() * 100));
-    };
-    
-    document.getElementById('clear-btn')!.onclick = () => {
-        const sel = selectedCell();
-        if (sel) setCellValue(sel.row, sel.col, 0);
-    };
-    
-    effect(() => {
-        viewport();
-        renderViewport();
-    });
-    
-    effect(() => {
-        gridData();
+    const update = () => {
         const rows = visibleRows();
         const cols = visibleCols();
         
@@ -442,43 +413,71 @@ const renderApp = () => {
         }
         
         updateStats();
-    });
-    
-    effect(() => {
-        selectedCell();
         updateSelection();
-    });
+        updatePerf();
+        
+        const undoBtnEl = document.getElementById('undo-btn') as HTMLButtonElement;
+        if (undoBtnEl) undoBtnEl.disabled = undoStack().length === 0;
+    };
+    
+    const onScroll = () => {
+        updateViewport(gridScroll);
+        renderViewport();
+    };
+    
+    gridScroll.addEventListener('scroll', onScroll);
+    
+    const undoBtnEl = document.getElementById('undo-btn');
+    if (undoBtnEl) {
+        addEventListener(undoBtnEl, 'click', () => performUndo());
+    }
+    
+    const randBtn = document.getElementById('randomize-btn');
+    if (randBtn) {
+        addEventListener(randBtn, 'click', () => {
+            const sel = selectedCell();
+            if (sel) setCellValue(sel.row, sel.col, Math.floor(Math.random() * 100));
+        });
+    }
+    
+    const clearBtn = document.getElementById('clear-btn');
+    if (clearBtn) {
+        addEventListener(clearBtn, 'click', () => {
+            const sel = selectedCell();
+            if (sel) setCellValue(sel.row, sel.col, 0);
+        });
+    }
     
     effect(() => {
+        viewport();
+        gridData();
+        selectedCell();
         fps();
         avgRenderMs();
         batchSize();
         memoryDelta();
         liveDomNodes();
         totalSignalUpdates();
-        updatePerf();
-    });
-    
-    effect(() => {
-        const stack = undoStack();
-        undoBtn.disabled = stack.length === 0;
+        undoStack();
+        
+        update();
     });
     
     setTimeout(() => {
-        updateViewport(gridContainer);
+        updateViewport(gridScroll);
         renderViewport();
     }, 50);
     
-    return container;
+    return rootEl;
 };
 
 document.addEventListener('DOMContentLoaded', () => {
     renderApp();
     
-    const rafLoop = () => {
+    let rafLoop = () => {
         doRandomUpdates();
         updateLiveDomCount();
-        requestAnimationFrame(rafLoop);
+        updateFrameId = requestAnimationFrame(rafLoop);
     };
     
     rafLoop();
