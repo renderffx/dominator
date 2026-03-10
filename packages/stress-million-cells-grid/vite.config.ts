@@ -1,18 +1,15 @@
 import { defineConfig } from 'vite';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import path from 'node:path';
 import { dominatorPlugin } from '../core/src/compiler/vite-plugin.ts';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
 export default defineConfig({
+    plugins: [dominatorPlugin()],
     resolve: {
         alias: {
-            '@dominator/core': path.resolve(__dirname, '../core/src/index.ts'),
-        },
+            '@dominator/core': path.resolve(__dirname, '../core/src/index.ts')
+        }
     },
-    plugins: [dominatorPlugin()],
     server: {
-        port: 5175,
-    },
+        port: 5176
+    }
 });
