@@ -247,16 +247,24 @@ const renderApp = () => {
         viewportSpacer.innerHTML = '';
         
         const grid = gridData();
+        const startRow = rows[0] ?? 0;
+        const startCol = cols[0] ?? 0;
+        
+        viewportSpacer.style.width = `${cols.length * CELL_WIDTH}px`;
+        viewportSpacer.style.height = `${rows.length * CELL_HEIGHT}px`;
+        viewportSpacer.style.transform = `translate(${startCol * CELL_WIDTH}px, ${startRow * CELL_HEIGHT}px)`;
         
         for (const row of rows) {
             const rowEl = document.createElement('div');
             rowEl.className = 'grid-row';
-            rowEl.dataset.row = String(row);
+            rowEl.style.position = 'relative';
+            rowEl.style.height = `${CELL_HEIGHT}px`;
             
             for (const col of cols) {
-                const key = getCellKey(row, col);
-                const value = grid.get(key) ?? 0;
-                const cellEl = createCellElement(row, col, value);
+                const cellEl = createCellElement(row, col);
+                cellEl.style.position = 'absolute';
+                cellEl.style.left = `${(col - startCol) * CELL_WIDTH}px`;
+                cellEl.style.top = '0';
                 rowEl.appendChild(cellEl);
             }
             
@@ -271,7 +279,10 @@ const renderApp = () => {
         if (vpVnodesEl) vpVnodesEl.textContent = String((vp.endRow - vp.startRow) * (vp.endCol - vp.startCol));
     };
     
-    const createCellElement = (row: number, col: number, value: number): HTMLElement => {
+    const createCellElement = (row: number, col: number): HTMLElement => {
+        const key = getCellKey(row, col);
+        const value = gridData().get(key) ?? 0;
+        
         const cell = document.createElement('div');
         cell.className = 'cell';
         cell.dataset.row = String(row);
