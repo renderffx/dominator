@@ -44,12 +44,13 @@ Open http://localhost:5175
 - `colAverages`: Per-column statistics
 - `highValueCount`: Cells with value ≥80
 
-### Branching Conditionals (grid.dnr)
-```dnr
-{#if value >= 80}  red bg + star icon + glow
-{:else if value >= 50}  orange heat bar
-{:else if value >= 20}  value text
-{:else}  blue low + mini bar
+### Branching Conditionals
+The main.ts implements deep conditionals per cell:
+```typescript
+if (value >= 80)  // red bg + star icon + glow
+else if (value >= 50)  // orange heat bar
+else if (value >= 20)  // value text
+else if (value > 0)  // blue low + mini bar
 ```
 
 ## Optimization Notes
@@ -58,7 +59,7 @@ Open http://localhost:5175
 2. **Sparse storage**: Map<string, number> avoids massive array allocations
 3. **Virtualization**: Only render visible cells + overscan, not the full 1M grid
 4. **Stable keys**: `${row}-${col}` ensures consistent DOM reconciliation
-5. **Minimal effect deps**: Template reads specific signals, not entire grid
-6. **Pooled VNodes**: Uses Dominator's built-in VNode pooling via `createVNode`/`releaseVNode`
-7. **will-change hints**: CSS `will-change: transform` on viewport spacer
-8. **No inline functions in loops**: Handlers defined once, reused across cells
+5. **Minimal effect deps**: Effects read specific signals, not entire grid
+6. **will-change hints**: CSS `will-change: transform` on viewport spacer
+7. **Event delegation**: Single scroll listener on container instead of per-cell
+8. **Reuse cell elements**: Update cell innerHTML/classList instead of recreating
