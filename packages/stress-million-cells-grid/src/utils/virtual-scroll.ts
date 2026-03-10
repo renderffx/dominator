@@ -1,54 +1,44 @@
-import { batch, signal } from '@dominator/core';
-import { 
-    viewport, 
-    scrollPos, 
-    containerSize, 
-    CELL_WIDTH, 
-    CELL_HEIGHT,
-    OVERSCAN,
-    ROWS,
-    COLS
-} from '../state.js';
+import { viewport, TOTAL_ROWS, TOTAL_COLS } from '../state';
+import { batch } from '@dominator/core';
 
-export const virtualScrollRoot = signal<HTMLElement | null>(null);
+export const ROW_HEIGHT = 24;
+export const COL_WIDTH = 80;
+const OVERSCAN_X = 5;
+const OVERSCAN_Y = 10;
 
-export const updateViewport = (container: HTMLElement) => {
-    const scrollLeft = container.scrollLeft;
-    const scrollTop = container.scrollTop;
-    const clientWidth = container.clientWidth;
-    const clientHeight = container.clientHeight;
+export function updateViewport(
+    scrollTop: number,
+    scrollLeft: number,
+    containerHeight: number,
+    containerWidth: number
+) {
+    const rowStart = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN_Y);
+    const rowEnd = Math.min(
+        TOTAL_ROWS - 1,
+        Math.ceil((scrollTop + containerHeight) / ROW_HEIGHT) + OVERSCAN_Y
+    );
 
-    const totalWidth = COLS * CELL_WIDTH;
-    const totalHeight = ROWS * CELL_HEIGHT;
-
-    const startCol = Math.max(0, Math.floor(scrollLeft / CELL_WIDTH) - OVERSCAN);
-    const startRow = Math.max(0, Math.floor(scrollTop / CELL_HEIGHT) - OVERSCAN);
-    const endCol = Math.min(COLS, Math.ceil((scrollLeft + clientWidth) / CELL_WIDTH) + OVERSCAN);
-    const endRow = Math.min(ROWS, Math.ceil((scrollTop + clientHeight) / CELL_HEIGHT) + OVERSCAN);
+    const colStart = Math.max(0, Math.floor(scrollLeft / COL_WIDTH) - OVERSCAN_X);
+    const colEnd = Math.min(
+        TOTAL_COLS - 1,
+        Math.ceil((scrollLeft + containerWidth) / COL_WIDTH) + OVERSCAN_X
+    );
 
     batch(() => {
-        scrollPos.set({ x: scrollLeft, y: scrollTop });
-        containerSize.set({ width: clientWidth, height: clientHeight });
-        viewport.set({
-            startRow,
-            endRow,
-            startCol,
-            endCol,
-        });
+        if (viewport.rowStart() !== rowStart) viewport.rowStart.set(rowStart);
+        if (viewport.rowEnd() !== rowEnd) viewport.rowEnd.set(rowEnd);
+        if (viewport.colStart() !== colStart) viewport.colStart.set(colStart);
+        if (viewport.colEnd() !== colEnd) viewport.colEnd.set(colEnd);
     });
-};
+}
 
-export const scrollToCell = (row: number, col: number, container: HTMLElement) => {
-    const targetX = col * CELL_WIDTH;
-    const targetY = row * CELL_HEIGHT;
-    container.scrollTo({
-        left: targetX - container.clientWidth / 2,
-        top: targetY - container.clientHeight / 2,
-        behavior: 'smooth',
-    });
-};
-
-export const getVisibleCellCount = (): number => {
-    const vp = viewport();
-    return (vp.endRow - vp.startRow) * (vp.endCol - vp.startCol);
-};
+export function throttle<T extends (...args: any[]) => any>(fn: T, ms: number): T {
+    let last = 0;
+    return ((...args: any[]) => {
+        const now = performance.now();
+        if (now - last >= ms) {
+            fn(...args);
+            last = now;
+        }
+    }) as T;
+}
