@@ -1,0 +1,150 @@
+<div class="million-cells-app">
+  <header class="header">
+    <h1>Million Cells Grid</h1>
+    <div class="perf-overlay">
+      <div class="perf-item">
+        <span class="perf-label">FPS</span>
+        <span class="perf-value {fps() >= 55 ? 'good' : fps() >= 30 ? 'warn' : 'bad'}">{fps()}</span>
+      </div>
+      <div class="perf-item">
+        <span class="perf-label">Render</span>
+        <span class="perf-value {avgRenderMs() <= 12 ? 'good' : avgRenderMs() <= 20 ? 'warn' : 'bad'}">{avgRenderMs().toFixed(1)}ms</span>
+      </div>
+      <div class="perf-item">
+        <span class="perf-label">Batch</span>
+        <span class="perf-value">{batchSize()}</span>
+      </div>
+      <div class="perf-item">
+        <span class="perf-label">DOM</span>
+        <span class="perf-value">{liveDomNodes()}</span>
+      </div>
+      <div class="perf-item">
+        <span class="perf-label">Memory</span>
+        <span class="perf-value">{memoryDelta()}MB</span>
+      </div>
+      <div class="perf-item">
+        <span class="perf-label">Updates</span>
+        <span class="perf-value">{totalSignalUpdates()}</span>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button onClick={performUndo} disabled={undoStack().length === 0}>Undo</button>
+    </div>
+  </header>
+  
+  <main class="grid-main">
+    <div class="grid-container" 
+         style:width="{COLS * CELL_WIDTH}px" 
+         style:height="{ROWS * CELL_HEIGHT}px"
+         onScroll={e => { const t = e.target as HTMLElement; updateViewport(t); }}
+         ref={el => virtualScrollRoot.set(el)}>
+      <div class="viewport-spacer" 
+           style:transform="translate({viewport().startCol * CELL_WIDTH}px, {viewport().startRow * CELL_HEIGHT}px)">
+        {visibleRows().map(row => (
+          <div class="grid-row" key={row}>
+            {visibleCols().map(col => {
+              const key = getCellKey(row, col);
+              const value = gridData().get(key) ?? 0;
+              const isSelected = selectedCell()?.row === row && selectedCell()?.col === col;
+              return (
+                <div 
+                  class="cell {value >= 80 ? 'high' : value >= 50 ? 'medium' : value >= 20 ? 'low' : 'none'} {isSelected ? 'selected' : ''}"
+                  style:backgroundColor={value >= 80 ? '#ef4444' : value >= 50 ? '#f97316' : value >= 20 ? '#6b7280' : '#1e293b'}
+                  style:--heat={value / 100}
+                  onClick={e => { e.stopPropagation(); selectedCell.set({row, col}); }}
+                  onKeydown={e => { 
+                    if (e.key === 'ArrowUp' && row > 0) selectedCell.set({row: row - 1, col});
+                    else if (e.key === 'ArrowDown' && row < ROWS - 1) selectedCell.set({row: row + 1, col});
+                    else if (e.key === 'ArrowLeft' && col > 0) selectedCell.set({row, col: col - 1});
+                    else if (e.key === 'ArrowRight' && col < COLS - 1) selectedCell.set({row, col: col + 1});
+                  }}
+                  data-row={row}
+                  data-col={col}
+                  tabIndex={0}
+                >
+                  {#if value >= 80}
+                    <span class="cell-icon">&#9733;</span>
+                    <span class="cell-glow"></span>
+                  {else if value >= 50}
+                    <div class="heat-bar" style:width="{value}%"></div>
+                  {else if value >= 20}
+                    <span class="cell-value">{value}</span>
+                  {else if value > 0}
+                    <div class="mini-bar" style:width="{value * 2}%"></div>
+                  {/if}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+    
+    <aside class="sidebar">
+      <section class="stats-section">
+        <h3>Grid Stats</h3>
+        <div class="stat-row">
+          <span>Total Cells:</span>
+          <strong>{TOTAL_CELLS.toLocaleString()}</strong>
+        </div>
+        <div class="stat-row">
+          <span>Non-Empty:</span>
+          <strong>{gridData().size.toLocaleString()}</strong>
+        </div>
+        <div class="stat-row">
+          <span>High Value (80+):</span>
+          <strong>{highValueCount()}</strong>
+        </div>
+      </section>
+      
+      <section class="stats-section">
+        <h3>Viewport</h3>
+        <div class="stat-row">
+          <span>Visible Rows:</span>
+          <strong>{viewport().endRow - viewport().startRow}</strong>
+        </div>
+        <div class="stat-row">
+          <span>Visible Cols:</span>
+          <strong>{viewport().endCol - viewport().startCol}</strong>
+        </div>
+        <div class="stat-row">
+          <span>VNodes:</span>
+          <strong>{(viewport().endRow - viewport().startRow) * (viewport().endCol - viewport().startCol)}</strong>
+        </div>
+      </section>
+      
+      {#if selectedCell()}
+        <section class="stats-section">
+          <h3>Selected Cell</h3>
+          <div class="stat-row">
+            <span>Row:</span>
+            <strong>{selectedCell()?.row}</strong>
+          </div>
+          <div class="stat-row">
+            <span>Col:</span>
+            <strong>{selectedCell()?.col}</strong>
+          </div>
+          <div class="stat-row">
+            <span>Value:</span>
+            <strong>{gridData().get(getCellKey(selectedCell()!.row, selectedCell()!.col)) ?? 0}</strong>
+          </div>
+          <button class="action-btn" onClick={e => {
+            const cell = selectedCell();
+            if (cell) setCellValue(cell.row, cell.col, Math.floor(Math.random() * 100));
+          }}>Randomize</button>
+          <button class="action-btn" onClick={e => {
+            const cell = selectedCell();
+            if (cell) setCellValue(cell.row, cell.col, 0);
+          }}>Clear</button>
+        </section>
+      {/if}
+      
+      <section class="controls-section">
+        <h3>Controls</h3>
+        <p class="hint">Arrow keys to navigate cells</p>
+        <p class="hint">Click to select</p>
+        <p class="hint">Updates: RAF batch (1000-3000/frame)</p>
+      </section>
+    </aside>
+  </main>
+</div>
