@@ -4,10 +4,10 @@ export const codegen = (instructions: Instruction[], functionName = 'render'): s
     let code = `import { effect } from '@dominator/core';\n`;
     code += `import * as stateModule from '../state';\n\n`;
     code += `export const ${functionName} = () => {\n`;
-    code += '  const state = stateModule as any;\n';
-    code += '  const events = (window as any);\n\n';
+    code += '  const state = stateModule;\n';
+    code += '  const events = window;\n\n';
     code += '  // Dynamic injection of state into local scope\n';
-    code += '  const { currentColor, tool, pixels, history, redoStack, GRID_SIZE, colorCounts, undo, redo, exportToPNG, startDrawing, ifDrawing, stopDrawing, PARTICLE_COUNT, getParticles, frame, mouse, NODE_COUNT, getNodes, fps, opsPerSec, mode } = state;\n';
+    code += '  const { currentColor, tool, pixels, history, redoStack, GRID_SIZE, colorCounts, undo, redo, exportToPNG, startDrawing, ifDrawing, stopDrawing, PARTICLE_COUNT, getParticles, frame, mouse, NODE_COUNT, getNodes, fps, opsPerSec, mode, viewport, gridData, TOTAL_ROWS, TOTAL_COLS, selectedCell, stats, perf } = state;\n';
 
     const generateBlock = (instrs: Instruction[]): string => {
         let blockCode = '';

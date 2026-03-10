@@ -78,6 +78,26 @@ export const stats = computed(() => {
     };
 });
 
+// Helper functions for cell rendering
+export function getCellValue(row: number, col: number) {
+    const val = gridData().get(`${row}-${col}`);
+    return val === undefined ? '' : val;
+}
+
+export function getCellBg(row: number, col: number) {
+    const val = gridData().get(`${row}-${col}`) || 0;
+    return `hsl(0, 0%, ${val}%)`;
+}
+
+export function getCellClass(row: number, col: number) {
+    const val = gridData().get(`${row}-${col}`) || 0;
+    let cls = '';
+    if (val >= 80) cls += 'cell-high cell-glow ';
+    if (val >= 50) cls += 'cell-mid ';
+    if (val >= 20) cls += 'cell-low ';
+    return cls.trim();
+}
+
 // Actions
 export function pushUndo() {
     const current = new Map(gridData());

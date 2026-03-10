@@ -40,6 +40,32 @@ importers:
         specifier: ^5.2.0
         version: 5.4.21(@types/node@20.19.30)
 
+  packages/ralph-loop:
+    dependencies:
+      '@dominator/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+      vite:
+        specifier: ^5.2.0
+        version: 5.4.21(@types/node@20.19.30)
+
+  packages/stress-million-cells-grid:
+    dependencies:
+      '@dominator/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+      vite:
+        specifier: ^5.2.0
+        version: 5.4.21(@types/node@20.19.30)
+
   packages/todo-example:
     dependencies:
       '@dominator/core':
