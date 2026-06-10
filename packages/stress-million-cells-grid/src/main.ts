@@ -1,6 +1,7 @@
 import { setupDelegation, batch } from '@dominator/core';
 // @ts-ignore
 import { render } from './templates/grid.dnr';
+import './style.css';
 import * as state from './state';
 import { updateViewport, throttle, ROW_HEIGHT, COL_WIDTH } from './utils/virtual-scroll';
 

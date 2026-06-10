@@ -5,6 +5,7 @@ export * from './batch.ts';
 export * from './events.ts';
 export * from './pool.ts';
 export * from './signal.ts';
+export * from './reconcile.ts';
 export * from './router.ts';
 export * from './ssr.ts';
 

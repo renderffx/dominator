@@ -98,6 +98,18 @@ export function getCellClass(row: number, col: number) {
     return cls.trim();
 }
 
+export function getCellFullClass(row: number, col: number) {
+    const isSelected = selectedCell() === `${row}-${col}`;
+    const baseClass = getCellClass(row, col);
+    return `grid-cell ${isSelected ? 'selected' : ''} ${baseClass}`.trim();
+}
+
+export function getViewportTransform() {
+    return `translate(${viewport.colStart() * 80}px, ${viewport.rowStart() * 24}px)`;
+}
+
+export const domNodes = () => document.querySelectorAll('*').length;
+
 // Actions
 export function pushUndo() {
     const current = new Map(gridData());
