@@ -1,89 +1,93 @@
 import type { Instruction } from './ssa.ts';
 
-export const codegen = (instructions: Instruction[]): string => {
+export const codegen = (instructions: Instruction[], functionName = 'render'): string => {
     let code = `import { effect } from '@dominator/core';\n`;
     code += `import * as stateModule from '../state';\n\n`;
-    code += 'export const renderCanvas = () => {\n';
-    code += '  const { currentColor, tool, pixels, history, redoStack, GRID_SIZE, colorCounts, undo, redo, exportToPNG, startDrawing, ifDrawing, stopDrawing } = stateModule as any;\n';
-    code += '  const events = (window as any);\n';
+    code += `export const ${functionName} = () => {\n`;
+    code += '  const state = stateModule;\n';
+    code += '  const events = window;\n\n';
+    code += '  // Dynamic injection of state into local scope\n';
+    code += '  const { currentColor, tool, pixels, history, redoStack, GRID_SIZE, colorCounts, undo, redo, exportToPNG, startDrawing, ifDrawing, stopDrawing, PARTICLE_COUNT, getParticles, frame, mouse, NODE_COUNT, getNodes, fps, opsPerSec, mode, viewport, gridData, TOTAL_ROWS, TOTAL_COLS, selectedCell, stats, perf, domNodes } = state;\n';
 
-    for (const ins of instructions) {
-        const { op, target, args } = ins;
-        switch (op) {
-            case 'create':
-                code += `  const ${target} = document.createElement('${args[0]}');\n`;
-                break;
-            case 'attr': {
-                const [key, value] = args;
-                if (key.startsWith('style:')) {
-                    const styleProp = key.split(':')[1];
-                    if (typeof value === 'object' && value.type === 'expr') {
-                        code += `  effect(() => { ${target}.style.${styleProp} = ${value.content}; });\n`;
+    const generateBlock = (instrs: Instruction[]): string => {
+        let blockCode = '';
+        for (const ins of instrs) {
+            const { op, target, args, nested } = ins;
+            switch (op) {
+                case 'create':
+                    blockCode += `  const ${target} = document.createElement('${args[0]}');\n`;
+                    break;
+                case 'attr': {
+                    const [key, value] = args;
+                    if (key.startsWith('style:')) {
+                        const styleProp = key.split(':')[1];
+                        if (typeof value === 'object' && value.type === 'expr') {
+                            blockCode += `  effect(() => { ${target}.style.${styleProp} = ${value}; });\n`;
+                        } else {
+                            if (typeof value === 'string' && value.startsWith('{') && value.endsWith('}')) {
+                                const expr = value.slice(1, -1);
+                                blockCode += `  effect(() => { ${target}.style.${styleProp} = ${expr}; });\n`;
+                            } else {
+                                blockCode += `  ${target}.style.${styleProp} = ${JSON.stringify(value)};\n`;
+                            }
+                        }
                     } else {
-                        code += `  ${target}.style.${styleProp} = ${JSON.stringify(value)};\n`;
+                        if (typeof value === 'string' && value.startsWith('{') && value.endsWith('}')) {
+                            const expr = value.slice(1, -1);
+                            blockCode += `  effect(() => { ${target}.setAttribute('${key}', ${expr}); });\n`;
+                        } else {
+                            blockCode += `  ${target}.setAttribute('${key}', ${JSON.stringify(value)});\n`;
+                        }
                     }
-                } else if (typeof value === 'object' && value.type === 'expr') {
-                    code += `  effect(() => { ${target}.setAttribute('${key}', ${value.content}); });\n`;
-                } else {
-                    code += `  ${target}.setAttribute('${key}', ${JSON.stringify(value)});\n`;
+                    break;
                 }
-                break;
-            }
-            case 'event': {
-                const [event, value] = args;
-                if (typeof value === 'object' && value.type === 'expr') {
-                    let content = value.content;
-                    if (content.startsWith('e =>') || content.startsWith('(e) =>')) {
-                        code += `  ${target}.addEventListener('${event}', ${content});\n`;
+                case 'event': {
+                    const [event, value] = args;
+                    if (typeof value === 'string' && value.startsWith('{') && value.endsWith('}')) {
+                        const handler = value.slice(1, -1);
+                        blockCode += `  ${target}.addEventListener('${event}', ${handler});\n`;
                     } else {
-                        code += `  ${target}.addEventListener('${event}', (e) => ${content}(e));\n`;
+                        blockCode += `  ${target}.addEventListener('${event}', events.${value});\n`;
                     }
-                } else {
-                    code += `  ${target}.addEventListener('${event}', events.${value});\n`;
+                    break;
                 }
-                break;
-            }
-            case 'text':
-                code += `  const ${target} = document.createTextNode(${JSON.stringify(args[0])});\n`;
-                break;
-            case 'expr': {
-                const expr = args[0];
-                // Check if it's a loop or a simple value
-                if (expr.includes('.map(') || expr.includes('Array.from')) {
-                    code += `  const ${target} = document.createDocumentFragment();\n`;
-                    if (expr.includes('GRID_SIZE')) {
-                        code += `  // Optimized grid generation\n`;
-                        code += `  for (let i = 0; i < GRID_SIZE * GRID_SIZE; i++) {\n`;
-                        code += `    const x = i % GRID_SIZE; const y = Math.floor(i / GRID_SIZE);\n`;
-                        code += `    const pixel = document.createElement('div');\n`;
-                        code += `    pixel.className = 'pixel';\n`;
-                        code += `    pixel.dataset.x = x.toString(); pixel.dataset.y = y.toString();\n`;
-                        code += `    effect(() => { pixel.style.backgroundColor = pixels()[\`\${x}-\${y}\`] || '#ffffff'; });\n`;
-                        code += `    ${target}.appendChild(pixel);\n`;
-                        code += `  }\n`;
-                    } else if (expr.includes('colorCounts')) {
-                        code += `  effect(() => {\n`;
-                        code += `    ${target}.textContent = '';\n`;
-                        code += `    colorCounts().forEach(([col, cnt]) => {\n`;
-                        code += `      const item = document.createElement('div');\n`;
-                        code += `      item.className = 'usage-item';\n`;
-                        code += `      item.style.setProperty('--color', col);\n`;
-                        code += `      item.innerHTML = \`<div class="color-swatch"></div><span class="color-code">\${col}</span><span class="color-count">\${cnt}</span>\`;\n`;
-                        code += `      ${target}.appendChild(item);\n`;
-                        code += `    });\n`;
-                        code += `  });\n`;
+                case 'text':
+                    blockCode += `  const ${target} = document.createTextNode(${JSON.stringify(args[0])});\n`;
+                    break;
+                case 'expr': {
+                    const expr = args[0];
+                    blockCode += `  const ${target} = document.createTextNode('');\n`;
+                    blockCode += `  effect(() => { ${target}.textContent = String(${expr}); });\n`;
+                    break;
+                }
+                case 'append':
+                    blockCode += `  ${target}.appendChild(${args[0]});\n`;
+                    break;
+                case 'each': {
+                    const [source, context] = args;
+                    blockCode += `  const ${target} = document.createDocumentFragment();\n`;
+                    blockCode += `  effect(() => {\n`;
+                    blockCode += `      ${target}.textContent = ''; \n`;
+                    blockCode += `      (${source} || []).forEach((${context}) => {\n`;
+                    if (nested) {
+                        blockCode += generateBlock(nested);
+                        const created = new Set(nested.filter(i => ['create', 'text', 'expr', 'each'].includes(i.op)).map(i => i.target));
+                        const appended = new Set(nested.filter(i => i.op === 'append').map(i => i.args[0]));
+                        const roots = Array.from(created).filter(t => !appended.has(t));
+                        roots.forEach(r => {
+                            blockCode += `        ${target}.appendChild(${r});\n`;
+                        });
                     }
-                } else {
-                    code += `  const ${target} = document.createTextNode('');\n`;
-                    code += `  effect(() => { ${target}.textContent = String(${expr}); });\n`;
+                    blockCode += `      });\n`;
+                    blockCode += `  });\n`;
+                    break;
                 }
-                break;
             }
-            case 'append':
-                code += `  ${target}.appendChild(${args[0]});\n`;
-                break;
         }
-    }
+        return blockCode;
+    };
+
+    code += generateBlock(instructions);
 
     const targets = new Set(instructions.map(i => i.target));
     const children = new Set(instructions.filter(i => i.op === 'append').map(i => i.args[0]));

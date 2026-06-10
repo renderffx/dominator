@@ -1,0 +1,22 @@
+<div class="ralph-container">
+  <div class="status-overlay">
+    <div class="mode-indicator">{mode().toUpperCase()}</div>
+  </div>
+
+  <div class="viewport">
+    {#each getNodes() as n}
+      <div 
+        class="node" 
+        style:transform={n.transform}
+        style:backgroundColor={n.color}
+      />
+    {/each}
+  </div>
+  
+  <div class="dashboard">
+    <div class="metric">
+       <span class="value">{fps()}</span>
+       <label>FPS</label>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,97 @@
+:root {
+  --bg: #000;
+  --fg: #fff;
+  --accent: #f00;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  overflow: hidden;
+  font-family: 'Geist Mono', monospace;
+}
+
+.ralph-container {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  background: radial-gradient(circle at center, #111, #000);
+}
+
+.status-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 10;
+  opacity: 0.1;
+  font-size: 20vw;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: -0.05em;
+  white-space: nowrap;
+}
+
+.mode-indicator {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 0.1;
+  }
+
+  50% {
+    opacity: 0.2;
+  }
+
+  100% {
+    opacity: 0.1;
+  }
+}
+
+.dashboard {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #333;
+}
+
+.metric {
+  text-align: right;
+}
+
+.value {
+  font-size: 24px;
+  font-weight: bold;
+  color: var(--accent);
+  display: block;
+}
+
+.metric label {
+  font-size: 10px;
+  color: #666;
+  text-transform: uppercase;
+}
+
+.viewport {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.node {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  will-change: transform, background-color;
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.5);
+  /* Glowing particles */
+}

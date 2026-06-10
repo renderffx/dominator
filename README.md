@@ -1,55 +1,49 @@
-# Dominator
+# Dominator: SSA-Based UI Foundation
 
-Dominator is a high-performance reactive UI engine that compiles declarative templates into a Static Single Assignment (SSA) instruction set. By bypassing the Virtual DOM and utilizing a linear pipeline of imperative updates, Dominator achieves near-native performance with zero reconciliation overhead.
+Dominator is a high-performance UI engine that compiles templates into a Static Single Assignment (SSA) instruction set. It eliminates the virtual DOM reconciliation layer, targeting the DOM directly via a linear pipeline of imperative updates.
+
+## Technical Fundamentals
+
+- **SSA Instruction Set**: Templates map directly to atomic DOM operations.
+- **Fine-Grained Reactivity**: State changes target specific instruction offsets.
+- **Batched Scheduling**: Coordinated microtask queue for DOM commits.
+- **Zero Reconciliation**: No tree diffing or runtime overhead.
+
+## Showcase: Ralph Loop
+
+The Ralph Loop is a high-performance benchmark demonstrating Dominator's ability to handle extreme state pressure. It renders 1,000+ independent nodes updated via a high-frequency `requestAnimationFrame` loop.
+
+- **Location**: `packages/ralph-loop`
+- **Performance**: 5k+ property updates per frame at 60 FPS.
+- **Architecture**: Signal-based physics and instruction reification.
 
 ## Technical Architecture
 
-### SSA Instruction Pipeline
-The compiler (`packages/core/src/compiler`) transforms JSX directly into a flat sequence of atomic DOM instructions such as `create`, `attr`, and `append`. Each operation is assigned a unique identifier, allowing the runtime to perform targeted updates without tree reconciliation.
+### SSA Pipeline
 
-### Fine-grained Reactivity
-State is managed via optimized signals. When a signal is accessed within a template, the compiler creates a direct link between the signal and the specific DOM attribute or text node, ensuring updates are scoped to the exact point of change.
+The compiler transforms DNR templates into SSA form. Dynamic expressions are reified into `effect` blocks that maintain a 1:1 mapping with DOM nodes. This ensures that state updates have a time complexity of $O(1)$ relative to the tree size.
 
-### Microtask Batching
-DOM updates are batched using a prioritized microtask queue. This ensures that multiple state changes in a single execution cycle result in a single, coordinated DOM commit, eliminating redundant layout shifts.
+### Instruction Set
 
-## Project Structure
-
-- **Core** (`packages/core`): The fundamental reactive engine, SSA compiler, and signal system.
-- **Pixel Canvas** (`packages/pixel-canvas`): A high-stress demonstration of fine-grained reactivity featuring a 4,096-node grid, real-time collaboration simulation, and artifact export.
-- **Todo Example** (`packages/todo-example`): A foundational implementation demonstrating standard state management.
-
-## Showcases
-
-### Pixel Canvas
-The Pixel Canvas serves as the primary benchmark for Dominator's performance. It features:
-- **SSA-Optimized Grid**: Direct manipulation of thousands of individual pixel nodes.
-- **State Management**: Undo/Redo history, live palette usage statistics, and color tracking.
-- **Premium Interface**: A minimal, engineering-focused UI built with Inter and Geist Mono, utilizing glassmorphism and monochrome design tokens.
+- `create(tag)`: Node allocation.
+- `attr(id, key, val)`: Atomic reactive attribute binding.
+- `append(parent, child)`: Tree assembly.
+- `each(source, scope)`: Block-level reactive iteration.
 
 ## Development
 
 ### Installation
+
 ```bash
 pnpm install
 ```
 
-### Compiling Templates
-Dominator uses a custom `.dnr` format for its high-performance templates. To compile a template to executable TypeScript:
-```bash
-pnpm run compile -- [input.dnr] [output.ts]
-```
+### Execution
 
-### Running Locally
-To launch the Pixel Canvas development server:
 ```bash
+# Run Ralph Loop Benchmark
+pnpm --filter @dominator/ralph-loop dev
+
+# Run Pixel Canvas Demo
 pnpm --filter @dominator/pixel-canvas dev
 ```
-
-## Comparisons
-
-Unlike traditional Virtual DOM libraries that rely on tree diffing ($O(n)$ where $n$ is the number of nodes), Dominator's SSA approach allows for $O(1)$ updates by targeting pre-computed instruction offsets. This results in significantly lower memory overhead and higher frame stability in complex applications.
-
----
-
-Built by the 
